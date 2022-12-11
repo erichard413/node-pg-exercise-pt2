@@ -5,12 +5,12 @@ const ExpressError = require("../expressError")
 
 router.get('/', async (req, res, next)=>{
     const result = await db.query(`SELECT * FROM invoices`);
-    return res.json({invoice: result.rows})
+    return res.json({invoices: result.rows})
 })
 
 router.get('/:id', async(req, res, next)=>{
     try {
-        const result = await db.query(`SELECT * FROM invoices WHERE id = ${req.params.id}`);
+        const result = await db.query(`SELECT * FROM invoices WHERE id =$1`, [req.params.id]);
         if (result.rowCount === 0){
         throw new ExpressError(`Cannot find invoice with id of ${req.params.id}`,404);
         }
@@ -31,15 +31,22 @@ router.post('/', async(req, res, next)=>{
 })
 
 router.put('/:id', async(req, res, next)=>{
-    try{ 
-       const { amt } =req.body;
-       const result = await db.query(`UPDATE invoices SET amt=$2
-       WHERE id = $1
-       RETURNING *`, [req.params.id, amt]);
-       if (result.rowCount === 0){
+    try{
+       let paid_date; 
+       const invoiceRes = await db.query(`SELECT * FROM invoices WHERE id = ${req.params.id}`);
+       if (invoiceRes.rowCount === 0){
         throw new ExpressError(`Cannot find invoice with id of ${req.params.id}`,404);
        }
-       return res.status(201).json({"invoice": result.rows[0]}) 
+       const { amt, paid } = req.body;
+       if (paid === "true") {
+            (invoiceRes.paid_date) ? paid_date = invoiceRes.paid_date : paid_date = new Date();
+       } else {
+            paid_date=null; 
+       }
+       const updateRes = await db.query(`UPDATE invoices SET amt=$2, paid =$3, paid_date=$4
+       WHERE id = $1
+       RETURNING *`, [req.params.id, amt, paid, paid_date]);
+       return res.status(201).json({"invoice": updateRes.rows[0]}) 
     } catch(e) {
        next(e);
     }
